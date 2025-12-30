@@ -1,43 +1,56 @@
 import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Header
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from openai import OpenAI
 from tools.clock import get_current_time
 from tools.search import web_search
 
+# Load local environment variables for development
 load_dotenv()
 
-# Initialize OpenAI Client
+# --- SYSTEM INITIALIZATION ---
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 API_SECRET_KEY = os.getenv("API_SECRET_KEY")
 
-app = FastAPI()
+app = FastAPI(title="SEI Automation Engine")
+
+# --- STEP 1.2: CORS CONFIGURATION ---
+# Permitting high-performance cross-origin data streams between our specialized domains.
+origins = [
+    "https://www.seisystems.co",   # Main Portfolio
+    "https://seisystems.co",       # Apex Domain
+    "https://labs.seisystems.co",  # Mendix Interactive Labs
+    "http://localhost:8080",       # Local Mendix Testing
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class AgentRequest(BaseModel):
     user_input: str
 
+# --- CORE LOGIC: THE BRAIN ---
 def ask_brain(user_query):
-    context_data = ""
+    context_data = f"The current time is {get_current_time()}."
     
-    # 1. Proactive Time Check (Always good for context)
-    context_data += f" The current time is {get_current_time()}."
+    # Intelligent Classifier: Only trigger search when external context is required.
+    knowledge_indicators = ["who is", "what is", "current", "latest", "news", "price"]
     
-    # 2. Smart Search Trigger
-    # Instead of keywords, we look for 'current', 'news', 'menu', 'weather', or general knowledge
-    # SOC2: This ensures we only use external egress when necessary.
-    general_knowledge_indicators = ["who is", "what is", "where is", "how many", "current", "latest", "price", "menu"]
-    
-    if any(word in user_query.lower() for word in general_knowledge_indicators):
-        print(f"DEBUG: Internal Classifier triggered Search for: {user_query}")
+    if any(word in user_query.lower() for word in knowledge_indicators):
         search_results = web_search(user_query)
         context_data += f" Web Search Results: {search_results}"
 
-    # 3. Final SOC2 System Prompt
     system_instr = (
-        "You are an AI Agent for SEI Systems. "
-        "Your responses must be professional, accurate, and based on the provided context. "
-        "If you do not have the answer in the context or your training data, state that you cannot find the information."
+        "You are the SEI Systems Intelligence Engine. "
+        "Your focus is on providing efficient, accurate automation insights. "
+        "Be concise, technical, and professional."
     )
     
     try:
@@ -49,36 +62,21 @@ def ask_brain(user_query):
             ]
         )
         return response.choices[0].message.content
-        
     except Exception as e:
-        print(f"CRITICAL ERROR: {e}")
-        return "I'm sorry, I'm having trouble connecting to my knowledge base right now."
+        return f"System Error: {str(e)}"
 
+# --- API ENDPOINTS ---
 @app.post("/agent/run")
 async def run_agent(request: AgentRequest, x_api_key: str = Header(None)):
     if x_api_key != API_SECRET_KEY:
-        raise HTTPException(status_code=403, detail="Invalid API Key")
+        raise HTTPException(status_code=403, detail="Unauthorized Access")
     
-    try:
-        answer = ask_brain(request.user_input)
-        
-        # SOC2 Debugging: Always log what we are sending
-        print(f"DEBUG: Sending to Mendix: {answer}", flush=True) 
-        
-        # WE MATCH THE MENDIX KEYS HERE:
-        return {
-            "output": str(answer),
-            "status": "success"
-        }
-        
-    except Exception as e:
-        print(f"CRITICAL ERROR: {str(e)}", flush=True)
-        # Match Mendix error pattern if possible
-        return {
-            "output": f"Error: {str(e)}",
-            "status": "error"
-        }
+    answer = ask_brain(request.user_input)
+    return {"output": str(answer), "status": "success"}
 
+# --- RENDER PORT BINDING ---
+# Ensures the application binds to the dynamic port assigned by the cloud environment.
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
