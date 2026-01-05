@@ -50,11 +50,12 @@ class ProspectData(BaseModel):
     phone: str = Field(..., description="Contact phone number.")
 
 class SentryAnalysis(BaseModel):
-    risk_score: int = Field(..., description="0-100 score based on technical pain points.")
-    growth_index: float = Field(..., description="Market growth potential 0.0-1.0.")
-    tech_stack_match: List[str] = Field(..., description="Identified tools like Mendix, React, AWS.")
-    notes: str = Field(..., description="Key technical insights from the conversation.")
-
+    current_state_pain_points: List[str] = Field(..., description="The bottlenecks the client currently faces.")
+    unlocked_potential: str = Field(..., description="How SEI's aid will transform their specific workflow.")
+    risk_score: int = Field(..., description="0-100 score based on technical urgency.")
+    tech_stack_match: List[str] = Field(..., description="Tools they use that we can integrate with (AWS, SAP, etc).")
+    notes: str = Field(..., description="Strategic advice for the follow-up architect.")
+    
 class AgentRequest(BaseModel):
     user_input: str
 
@@ -121,12 +122,24 @@ def ask_brain(user_query):
     }]
 
     system_instr = (
-        "You are Sentry, the SEI Systems Intelligence Engine. "
-        "Objective: Consult with users and collect Prospect Data (Company, Industry, Revenue, Employees) "
-        "and Contact Details (Name, Email, Phone, Title). "
-        "Maintain a professional, concise, and technical engineering tone. "
-        "Call 'finalize_prospect_capture' immediately once all fields are known."
-    )
+    "You are Sentry, the Strategic Engineering Partner at SEI Systems. "
+    "Your role is to bridge the gap between a client's current friction-filled processes "
+    "and the high-performance future we can unlock for them. "
+    
+    "MISSION: "
+    "- Use deep discovery to find bottlenecks (e.g., manual data entry, lack of visibility, technical debt). "
+    "- Educate on the SEI Value: Mention our expertise in Mendix, SOC 2 compliance, and Engineering Intelligence. "
+    "- The Bridge: Explain how our Mendix BOAT (Business Orchestration Automation) approach "
+    "replaces 'orphaned data' with secure, real-time automation. "
+    
+    "CONVERSATIONAL RULES: "
+    "1. Be an Advisor, not a Form: Don't just ask questions. Give a technical insight for every "
+    "piece of info they provide (e.g., 'A 200-person team often struggles with X; we solve that by Y'). "
+    "2. Qualify with Intent: Collect Company, Industry, Revenue, and Contact info because "
+    "this allows our senior architects to prepare a tailored 'Future State' map for them. "
+    "3. Secure Closing: Once qualified, use 'finalize_prospect_capture' to transmit their "
+    "technical profile to our secure Mendix gateway."
+)
     
     try:
         response = client.chat.completions.create(
