@@ -8,10 +8,10 @@ from datetime import datetime, timezone
 
 def submit_prospect_to_mendix(prospect_data, analysis_data):
     """
-    Formulates a JSON payload identical to the web form
-    and signs it for the Mendix Production Gateway.
+    Called by Sentry once discovery is complete. 
+    Matches the JSON structure of the discovery.html form.
     """
-    # 1. Align payload with the flattened Mendix Entity structure
+    # 1. Flatten the AI-extracted data for Mendix
     payload = {
         "source_system": "SENTRY-AI-AGENT",
         "event_id": str(uuid.uuid4()),
@@ -22,10 +22,8 @@ def submit_prospect_to_mendix(prospect_data, analysis_data):
         "sentry_notes": f"AI ANALYSIS: {analysis_data}"
     }
 
-    # 2. Strict HMAC Generation (SOC 2 Alignment)
-    # separators=(',', ':') removes whitespace to ensure hash matches Javascript's stringify
+    # 2. HMAC-SHA256 Signing (matches your frontend logic)
     payload_string = json.dumps(payload, separators=(',', ':'))
-    
     secret = os.getenv("MENDIX_HMAC_SECRET", "sei_systems_secure_gateway_01")
     
     signature = hmac.new(
@@ -34,7 +32,8 @@ def submit_prospect_to_mendix(prospect_data, analysis_data):
         hashlib.sha256
     ).hexdigest()
 
-    # 3. Post to the standard Mendix REST endpoint
+    # 3. Dispatch to the Mendix endpoint
+    # Note: Use the same URL your discovery.html uses
     mendix_url = "https://crm315-sandbox.mxapps.io/rest/IncomingLead/v1/prospectiveLead"
     
     try:
@@ -47,9 +46,9 @@ def submit_prospect_to_mendix(prospect_data, analysis_data):
             },
             timeout=10
         )
-        if response.status_code == 200 or response.status_code == 201:
-            return "Strategic Roadmap Initialized. Our team will be in touch."
+        if response.status_code in [200, 201]:
+            return "SUCCESS: Strategic Roadmap Initialized in Mendix."
         else:
-            return f"Transmission Handshake Failed (Error {response.status_code})"
+            return f"ERROR: Mendix Handshake Failed (Status {response.status_code})"
     except Exception as e:
-        return f"Gateway Connection Offline: {str(e)}"
+        return f"CRITICAL: Gateway Connection Error: {str(e)}"
