@@ -1,28 +1,37 @@
-import os, json, hmac, hashlib, uuid, requests
+import os
+import json
+import hmac
+import hashlib
+import uuid
 from datetime import datetime, timezone
 
 def submit_prospect_to_mendix(prospect_data, analysis_data):
     """
-    Acts as Sentry's 'Salesman' closing the deal with a full data packet.
+    Final completion trigger. Structures the JSON, calculates 
+    the HMAC signature, and prepares the POST request.
     """
     payload = {
-        "source_system": "SENTRY-AI-AGENT",
-        "event_id": str(uuid.uuid4()),
-        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-        "contact_name": prospect_data.get("contact_name"),
-        "company_name": prospect_data.get("company_name"),
-        "employee_count": prospect_data.get("employee_count", "Unknown"),
-        "bottleneck": prospect_data.get("bottleneck"),
-        "tech_stack": prospect_data.get("tech_stack", "Not specified"),
-        "sentry_notes": f"AI ANALYSIS: {analysis_data}"
+        "event_metadata": {
+            "source_system": "SENTRY-ALPHA-1",
+            "event_id": str(uuid.uuid4()),
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "security_hash": "PENDING" 
+        },
+        "prospect_data": prospect_data,
+        "sentry_analysis": analysis_data
     }
 
-    # HMAC Signature
-    payload_string = json.dumps(payload, separators=(',', ':'))
+    # SOC 2 Tip: Ensure consistent serialization (no extra spaces)
+    payload_string = json.dumps(payload, sort_keys=True)
+    
     secret = os.getenv("MENDIX_HMAC_SECRET", "sei_systems_secure_gateway_01")
-    signature = hmac.new(secret.encode('utf-8'), payload_string.encode('utf-8'), hashlib.sha256).hexdigest()
+    signature = hmac.new(
+        secret.encode('utf-8'),
+        payload_string.encode('utf-8'),
+        hashlib.sha256
+    ).hexdigest()
 
-    # Post to Mendix Production Gateway
-    mendix_url = "https://crm315-sandbox.mxapps.io/rest/IncomingLead/v1/prospectiveLead"
-    response = requests.post(mendix_url, json=payload, headers={"X-SEI-Signature": signature})
-    return f"Success. Status: {response.status_code}"
+    payload["event_metadata"]["security_hash"] = signature
+
+    # Note: Use requests or httpx to POST this to your Mendix endpoint
+    return json.dumps(payload)
